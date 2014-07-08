@@ -9,6 +9,12 @@
     <property
         name="main.class"
         value="org.nick.abe.Main" />
+    <property
+        name="bcprov.jar"
+        value="lib/bcprov-jdk15on-150.jar" />
+    <property
+        name="commons-cli"
+        value="lib/commons-cli-1.2.jar" />
 
     <target
         name="all"
@@ -26,7 +32,7 @@
         <javac
             srcdir="src"
             destdir="build"
-            classpath="lib/bcprov-jdk15on-148.jar"
+            classpath="${bcprov.jar}:${commons-cli}"
             debug="true"
             includeantruntime="false"
             encoding="UTF-8"
@@ -49,7 +55,10 @@
             <fileset dir="build" />
             <!-- Include BouncyCastle JAR -->
             <zipfileset
-                src="lib/bcprov-jdk15on-148.jar"
+                src="${bcprov.jar}"
+                includes="org/**" />
+            <zipfileset
+                src="${commons-cli}"
                 includes="org/**" />
         </jar>
     </target>

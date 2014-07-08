@@ -22,10 +22,10 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 /**
  * Main class for backup extractor.
  * 
- * @author Nikolay Elenkov
+ * @author Nikolay Elenkov, Ondrej Zima
  */
 public final class Main {
-	private static final String VERSION_STRING = "2.0.0";
+	private static final String VERSION_STRING = "2.0.1";
 	private static final String ABE_NAME = "Android Backup Extractor";
 	//
 	private static E_OPERATION pOperation = null;
@@ -78,11 +78,6 @@ public final class Main {
 
 	/** Display usage text. */
 	private static void usage() {
-		// System.out.println("Usage:");
-		// System.out.println("  unpack:\tabe unpack\t<backup.ab> <backup.tar> [password]");
-		// System.out.println("  pack:\t\tabe pack\t<backup.tar> <backup.ab> [password]");
-		// System.out.println("  pack for 4.4:\tabe pack-kk\t<backup.tar> <backup.ab> [password]");
-		//
 		String header = ABE_NAME + " version " + VERSION_STRING + "\n";
 		String footer = "\n";
 		HelpFormatter hf = new HelpFormatter();

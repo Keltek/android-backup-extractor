@@ -39,7 +39,9 @@ import org.bouncycastle.crypto.params.KeyParameter;
  */
 public final class AndroidBackup {
 	private static final String BACKUP_FILE_HEADER_MAGIC = "ANDROID BACKUP\n";
-	private static final int BACKUP_FILE_VERSION = 1;
+	private static final int BACKUP_FILE_V1 = 1;
+	private static final int BACKUP_FILE_V2 = 2;
+	private static final int BACKUP_FILE_V3 = 3;
 	private static final String ALGO_NAME = "AES";
 	private static final String CHARSET = "UTF-8";
 	private static final String ENCRYPTION_MECHANISM = "AES/CBC/PKCS5Padding";
@@ -93,12 +95,13 @@ public final class AndroidBackup {
 			if (isDebug) {
 				stdOut("Magic: " + magic);
 			}
-			String version = readHeaderLine(rawInStream); // 2
+			String versionStr = readHeaderLine(rawInStream); // 2
 			if (isDebug) {
-				stdOut("Version: " + version);
+				stdOut("Version: " + versionStr);
 			}
-			if (BACKUP_FILE_VERSION != Integer.parseInt(version)) {
-				throw new IllegalArgumentException("Don't know how to process version " + version);
+			int version = Integer.parseInt(versionStr);
+			if (version < BACKUP_FILE_V1 || version > BACKUP_FILE_V3) {
+				throw new IllegalArgumentException("Don't know how to process version " + versionStr + "(" + version + ")");
 			}
 			String compressed = readHeaderLine(rawInStream); // 3
 			boolean isCompressed = Integer.parseInt(compressed) == 1;
@@ -155,21 +158,21 @@ public final class AndroidBackup {
 				if (isDebug) {
 					stdOut("MK checksum: " + toHex(mkChecksum));
 				}
-				// now validate the decrypted master key against the checksum
-				// pre-4.4
-				byte[] calculatedCk = makeKeyChecksum(mk, ckSalt, rounds, false);
-				stdOut("Calculated MK checksum (pre-4.4): " + toHex(calculatedCk));
+				// now validate the decrypted master key against the checksum first try the algorithm matching the archive
+				// version
+				boolean useUtf = version >= BACKUP_FILE_V2;
+				byte[] calculatedCk = makeKeyChecksum(mk, ckSalt, rounds, useUtf);
+				stdOut("Calculated MK checksum (use UTF-8: " + useUtf + "): " + toHex(calculatedCk));
 				if (!Arrays.equals(calculatedCk, mkChecksum)) {
-					stdOut("pre-4.4 MK checksum does not match");
-					// try 4.4 variant
-					calculatedCk = makeKeyChecksum(mk, ckSalt, rounds, true);
-					stdOut("Calculated MK checksum (4.4+): " + toHex(calculatedCk));
+					stdOut("Checksum does not match.");
+					// try the reverse
+					calculatedCk = makeKeyChecksum(mk, ckSalt, rounds, !useUtf);
+					stdOut("Calculated MK checksum (use UTF-8: " + !useUtf + "): " + toHex(calculatedCk));
 				}
 				if (Arrays.equals(calculatedCk, mkChecksum)) {
 					ivSpec = new IvParameterSpec(initVector);
 					c.init(Cipher.DECRYPT_MODE, new SecretKeySpec(mk, ALGO_NAME), ivSpec);
-					// Only if all of the above worked properly will 'result' be
-					// assigned
+					// Only if all of the above worked properly will 'result' be assigned
 					cipherStream = new CipherInputStream(rawInStream, c);
 				}
 			}
@@ -187,14 +190,12 @@ public final class AndroidBackup {
 				long totalRead = 0;
 				while ((read = in.read(buff)) > 0) {
 					out.write(buff, 0, read);
-					if (isDebug) {
-						totalRead += read;
-						if (totalRead % MARKBYTES * BYTESINKBYTE == 0) {
-							stdOut(totalRead + " bytes read");
-						}
+					totalRead += read;
+					if (isDebug && (totalRead % MARKBYTES * BYTESINKBYTE == 0)) {
+						stdOut(totalRead + " bytes read");
 					}
 				}
-				stdOut("Writing complete.");
+				stdOut("Writing complete: " + totalRead + " bytes written to " + outputFilename + ".");
 			} finally {
 				if (in != null) {
 					in.close();
@@ -230,7 +231,8 @@ public final class AndroidBackup {
 		boolean compressing = true;
 		StringBuilder headerbuf = new StringBuilder(HEADERSIZE);
 		headerbuf.append(BACKUP_FILE_HEADER_MAGIC);
-		headerbuf.append(BACKUP_FILE_VERSION); // integer, no trailing \n
+		// integer, no trailing \n
+		headerbuf.append(isKitKat ? BACKUP_FILE_V2 : BACKUP_FILE_V1);
 		headerbuf.append(compressing ? "\n1\n" : "\n0\n");
 		OutputStream out = null;
 		FileInputStream in = null;
@@ -261,14 +263,12 @@ public final class AndroidBackup {
 			int totalRead = 0;
 			while ((read = in.read(buff)) > 0) {
 				out.write(buff, 0, read);
-				if (isDebug) {
-					totalRead += read;
-					if (totalRead % MARKBYTES * BYTESINKBYTE == 0) {
-						stdOut(totalRead + " bytes written");
-					}
+				totalRead += read;
+				if (isDebug && (totalRead % MARKBYTES * BYTESINKBYTE == 0)) {
+					stdOut(totalRead + " bytes written");
 				}
 			}
-			stdOut("Creating backup file complete.");
+			stdOut("Creating backup file complete: " + totalRead + " bytes written to " + backupFilename + ".");
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		} finally {
